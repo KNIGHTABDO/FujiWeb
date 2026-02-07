@@ -26,26 +26,33 @@ float random(vec2 p) {
   return fract(sin(dot(p.xy, vec2(12.9898, 78.233))) * 43758.5453123);
 }
 
-// Classic Chrome Curve: High contrast, desaturated shadows
-vec3 applyClassicChrome(vec3 color) {
-    // 1. Desaturate shadows more than highlights
+// "Nostalgic Negative" / Sunny Classic Chrome Math
+// Focuses on Amber/Gold highlights and Cyan/Teal shadows
+vec3 applyNostalgicNegative(vec3 color) {
     float luma = getLuma(color);
-    vec3 gray = vec3(luma);
     
-    // Saturation weighting: less saturation in darks
-    float satMask = smoothstep(0.0, 0.6, luma);
-    color = mix(gray, color, 0.7 + 0.3 * satMask);
+    // 1. Warm "Golden Hour" Tone Mapping
+    // Lift blacks slightly and tint with warm amber
+    vec3 amber = vec3(1.0, 0.7, 0.4);
+    vec3 cyan = vec3(0.3, 0.8, 1.0);
+    
+    // Split Toning: Warm highlights, Cool shadows
+    color = mix(color * cyan, color, smoothstep(0.0, 0.5, luma));
+    color = mix(color, color * amber, smoothstep(0.4, 1.0, luma));
 
-    // 2. Teal-ish Shadows / Warm Highlights shift
-    color.r += (1.0 - luma) * -0.02 + luma * 0.02;
-    color.b += (1.0 - luma) * 0.03 + luma * -0.03;
+    // 2. High Dynamic Range Curve (Fuji Dynamic Range 400% logic)
+    // Compresses highlights to prevent clipping and keeps them "creamy"
+    vec3 highlights = smoothstep(0.5, 1.2, color);
+    color = color - highlights * 0.3; // Highlight roll-off
 
-    // 3. Punchy Red (Classic Chrome characteristic)
-    float redMask = max(0.0, color.r - max(color.g, color.b)) * 2.0;
-    color.r += redMask * 0.1;
+    // 3. Selective Saturation
+    // Boost Oranges/Yellows (Sunlight), Desaturate Magentas (Digital artifacting)
+    float warmMask = smoothstep(0.1, 0.4, color.r - color.b);
+    color = mix(color, color * vec3(1.1, 1.05, 0.9), warmMask);
 
-    // 4. Contrast Curve (S-Curve)
-    color = smoothstep(0.0, 1.0, color);
+    // 4. Base S-Curve for that "Film Pop"
+    color = pow(color, vec3(1.1)); // Deepen shadows
+    color = color * 1.05; // Slight brightness boost
     
     return color;
 }
@@ -54,14 +61,12 @@ vec3 applyClassicChrome(vec3 color) {
 vec3 applyHalation(vec3 color, sampler2D tex, vec2 uv) {
     if (uHalationIntensity <= 0.0) return color;
 
-    // Threshold high energy sources
     float luma = getLuma(color);
     float haloSource = smoothstep(uHalationThreshold, 1.0, luma);
     
-    // Cheap 5-tap scatter
-    vec3 halationColor = vec3(1.0, 0.15, 0.05); // Red-shifted scatter
+    vec3 halationColor = vec3(1.0, 0.2, 0.05); 
     vec3 bloom = vec3(0.0);
-    float blurRadius = 0.006 * uHalationIntensity;
+    float blurRadius = 0.008 * uHalationIntensity;
     
     bloom += texture2D(tex, uv + vec2(blurRadius, 0.0)).rgb;
     bloom += texture2D(tex, uv - vec2(blurRadius, 0.0)).rgb;
@@ -69,52 +74,40 @@ vec3 applyHalation(vec3 color, sampler2D tex, vec2 uv) {
     bloom += texture2D(tex, uv - vec2(0.0, blurRadius)).rgb;
     bloom *= 0.25;
 
-    float bloomLuma = getLuma(bloom);
-    vec3 finalHalo = smoothstep(uHalationThreshold * 0.8, 1.0, bloomLuma) * halationColor;
-
-    return color + finalHalo * uHalationIntensity;
+    return color + (bloom * halationColor * haloSource * uHalationIntensity);
 }
 
 // Effect: Physics-based Grain (Luminance dependent)
 vec3 applyGrain(vec3 color, vec2 uv) {
     if (uGrainStrength <= 0.0) return color;
 
-    // Randomized offset for grain animation
     float grain = random(uv + fract(uTime));
     float luma = getLuma(color);
+    float weight = 1.0 - pow(abs(luma - 0.5) * 2.0, 2.0);
     
-    // Grain weight: peaks at midtones (0.5), dies in extreme shadows/highlights
-    float weight = 1.0 - pow(abs(luma - 0.5) * 2.0, 1.5);
-    
-    // Non-linear grain size (larger in shadows)
-    float sizeScale = mix(1.5, 0.8, luma); 
-    
-    return color + (grain - 0.5) * uGrainStrength * weight * sizeScale;
+    return color + (grain - 0.5) * uGrainStrength * weight;
 }
 
 void main() {
-    // 1. Initial Sample
     vec4 texel = texture2D(tDiffuse, vUv);
     vec3 color = texel.rgb;
 
-    // 2. Exposure & Dynamic Range Handling
+    // 1. Exposure
     color *= pow(2.0, uExposure);
     
-    // 3. Halation (Physics)
+    // 2. Halation
     color = applyHalation(color, tDiffuse, vUv);
 
-    // 4. Fuji Classic Chrome Color Science
-    color = applyClassicChrome(color);
+    // 3. Nostalgic "Sunny" Color Science
+    color = applyNostalgicNegative(color);
 
-    // 5. Global Contrast Adjustment
+    // 4. Final Mastering
     color = (color - 0.5) * uContrast + 0.5;
-
-    // 6. Final Grain Application
     color = applyGrain(color, vUv);
 
-    // 7. Vignette (Film characteristic)
+    // Vignette
     float dist = distance(vUv, vec2(0.5));
-    color *= smoothstep(0.8, 0.35, dist * 0.8);
+    color *= smoothstep(1.0, 0.4, dist * 0.9);
 
     gl_FragColor = vec4(clamp(color, 0.0, 1.0), texel.a);
 }
