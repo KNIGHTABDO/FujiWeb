@@ -1,5 +1,5 @@
-// FujiFilm Simulation Shader
-// Physically-inspired model for Halation, Grain, and Color
+// FujiFilm Simulation Shader: Ultra-High Precision "Master" Version
+// Focus: High-Fidelity Detail Preservation + Subtlety
 
 export const fujiFragmentShader = `
 uniform sampler2D tDiffuse;
@@ -10,104 +10,83 @@ uniform float uTime;
 uniform float uExposure;
 uniform float uContrast;
 uniform float uGrainStrength;
-uniform float uGrainScale;
 uniform float uHalationThreshold;
 uniform float uHalationIntensity;
 
 varying vec2 vUv;
 
-// Utils: Luma (Rec 709)
+// Rec 709 Luminance
 float getLuma(vec3 color) {
   return dot(color, vec3(0.2126, 0.7152, 0.0722));
 }
 
-// Utils: Noise for Grain
+// Ultra-subtle "Master" Grading
+vec3 applyFujiMaster(vec3 color) {
+    float luma = getLuma(color);
+    
+    // 1. Intelligent Highlight Compression (No Clipping)
+    // Preserves textures in bright clouds/sunlight
+    float compression = smoothstep(0.7, 1.2, luma);
+    color = mix(color, 1.0 - exp(-color * 1.5), compression * 0.2);
+
+    // 2. Pro-Grade Color Balance
+    // Subtle warm highlights (Amber) and cool shadows (Deep Teal)
+    vec3 highlights = vec3(1.02, 1.0, 0.98);
+    vec3 shadows = vec3(0.98, 1.0, 1.02);
+    color = mix(color * shadows, color * highlights, luma);
+
+    // 3. Clarity & Detail Enhancement
+    // Local contrast boost in the midtones for high-quality "feel"
+    float midToneMask = smoothstep(0.2, 0.5, luma) * smoothstep(0.8, 0.5, luma);
+    color += (color - 0.5) * 0.05 * midToneMask;
+
+    return color;
+}
+
+// Physically Accurate Sub-Pixel Grain
+// High-frequency noise that doesn't muddy the image
 float random(vec2 p) {
   return fract(sin(dot(p.xy, vec2(12.9898, 78.233))) * 43758.5453123);
 }
 
-// "Nostalgic Negative" / Sunny Classic Chrome Math
-// Focuses on Amber/Gold highlights and Cyan/Teal shadows
-vec3 applyNostalgicNegative(vec3 color) {
-    float luma = getLuma(color);
-    
-    // 1. Warm "Golden Hour" Tone Mapping
-    // Lift blacks slightly and tint with warm amber
-    vec3 amber = vec3(1.0, 0.7, 0.4);
-    vec3 cyan = vec3(0.3, 0.8, 1.0);
-    
-    // Split Toning: Warm highlights, Cool shadows
-    color = mix(color * cyan, color, smoothstep(0.0, 0.5, luma));
-    color = mix(color, color * amber, smoothstep(0.4, 1.0, luma));
-
-    // 2. High Dynamic Range Curve (Fuji Dynamic Range 400% logic)
-    // Compresses highlights to prevent clipping and keeps them "creamy"
-    vec3 highlights = smoothstep(0.5, 1.2, color);
-    color = color - highlights * 0.3; // Highlight roll-off
-
-    // 3. Selective Saturation
-    // Boost Oranges/Yellows (Sunlight), Desaturate Magentas (Digital artifacting)
-    float warmMask = smoothstep(0.1, 0.4, color.r - color.b);
-    color = mix(color, color * vec3(1.1, 1.05, 0.9), warmMask);
-
-    // 4. Base S-Curve for that "Film Pop"
-    color = pow(color, vec3(1.1)); // Deepen shadows
-    color = color * 1.05; // Slight brightness boost
-    
-    return color;
-}
-
-// Effect: Halation (Light scattering in film layers)
-vec3 applyHalation(vec3 color, sampler2D tex, vec2 uv) {
-    if (uHalationIntensity <= 0.0) return color;
-
-    float luma = getLuma(color);
-    float haloSource = smoothstep(uHalationThreshold, 1.0, luma);
-    
-    vec3 halationColor = vec3(1.0, 0.2, 0.05); 
-    vec3 bloom = vec3(0.0);
-    float blurRadius = 0.008 * uHalationIntensity;
-    
-    bloom += texture2D(tex, uv + vec2(blurRadius, 0.0)).rgb;
-    bloom += texture2D(tex, uv - vec2(blurRadius, 0.0)).rgb;
-    bloom += texture2D(tex, uv + vec2(0.0, blurRadius)).rgb;
-    bloom += texture2D(tex, uv - vec2(0.0, blurRadius)).rgb;
-    bloom *= 0.25;
-
-    return color + (bloom * halationColor * haloSource * uHalationIntensity);
-}
-
-// Effect: Physics-based Grain (Luminance dependent)
-vec3 applyGrain(vec3 color, vec2 uv) {
-    if (uGrainStrength <= 0.0) return color;
-
+vec3 applyFineGrain(vec3 color, vec2 uv) {
     float grain = random(uv + fract(uTime));
     float luma = getLuma(color);
-    float weight = 1.0 - pow(abs(luma - 0.5) * 2.0, 2.0);
+    // Extremely subtle masking
+    float weight = uGrainStrength * (1.0 - pow(abs(luma - 0.5) * 2.0, 3.0));
+    return color + (grain - 0.5) * weight * 0.1;
+}
+
+// Discrete Halation (Subtle glow, no "bad" blur)
+vec3 applySoftHalation(vec3 color, sampler2D tex, vec2 uv) {
+    float luma = getLuma(color);
+    if (luma < uHalationThreshold) return color;
     
-    return color + (grain - 0.5) * uGrainStrength * weight;
+    float blur = 0.002 * uHalationIntensity;
+    vec3 scatter = vec3(0.0);
+    scatter += texture2D(tex, uv + vec2(blur, 0.0)).rgb;
+    scatter += texture2D(tex, uv - vec2(blur, 0.0)).rgb;
+    scatter += texture2D(tex, uv + vec2(0.0, blur)).rgb;
+    scatter += texture2D(tex, uv - vec2(0.0, blur)).rgb;
+    scatter *= 0.25;
+
+    return mix(color, color + scatter * vec3(1.0, 0.2, 0.1), 0.1 * uHalationIntensity);
 }
 
 void main() {
     vec4 texel = texture2D(tDiffuse, vUv);
     vec3 color = texel.rgb;
 
-    // 1. Exposure
-    color *= pow(2.0, uExposure);
+    // 1. Master Grade
+    color = applyFujiMaster(color);
     
-    // 2. Halation
-    color = applyHalation(color, tDiffuse, vUv);
+    // 2. Physics (Subtle)
+    color = applySoftHalation(color, tDiffuse, vUv);
+    color = applyFineGrain(color, vUv);
 
-    // 3. Nostalgic "Sunny" Color Science
-    color = applyNostalgicNegative(color);
-
-    // 4. Final Mastering
+    // 3. Final Mastering
     color = (color - 0.5) * uContrast + 0.5;
-    color = applyGrain(color, vUv);
-
-    // Vignette
-    float dist = distance(vUv, vec2(0.5));
-    color *= smoothstep(1.0, 0.4, dist * 0.9);
+    color *= pow(2.0, uExposure);
 
     gl_FragColor = vec4(clamp(color, 0.0, 1.0), texel.a);
 }

@@ -30,10 +30,10 @@ export const useFilmStore = create<FilmState>((set) => ({
   contrast: 1.0,
   temperature: 6500,
 
-  grainScale: 1.5,
-  grainStrength: 0.15,
-  halationThreshold: 0.8,
-  halationIntensity: 0.6,
+  grainScale: 1.0,
+  grainStrength: 0.05,
+  halationThreshold: 0.9,
+  halationIntensity: 0.2,
   
   filmProfile: 'classic-chrome',
 
