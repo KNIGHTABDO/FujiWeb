@@ -1,6 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 :root {
   --background: 0 0% 100%;
@@ -19,4 +17,14 @@ body {
   color: #fff;
   font-family: var(--font-geist-sans), Arial, sans-serif;
   overflow: hidden; /* Prevent scrolling */
+}
+
+@theme {
+  --color-orange-500: #f97316;
+  --color-zinc-950: #09090b;
+  --color-zinc-900: #18181b;
+  --color-zinc-800: #27272a;
+  --color-zinc-500: #71717a;
+  --color-zinc-400: #a1a1aa;
+  --color-zinc-100: #f4f4f5;
 }
