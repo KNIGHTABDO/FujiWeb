@@ -13,7 +13,7 @@ interface SimulationMeshProps {
 
 export function SimulationMesh({ image }: SimulationMeshProps) {
   const meshRef = useRef<THREE.Mesh>(null);
-  const texture = useTexture(image);
+  const texture = useTexture(image) as THREE.Texture;
   const { viewport } = useThree();
   
   // Connect to Zustand store
@@ -53,7 +53,8 @@ export function SimulationMesh({ image }: SimulationMeshProps) {
   });
 
   // Aspect Ratio Fitting
-  const ratio = texture.image.width / texture.image.height;
+  const img = texture.image as HTMLImageElement;
+  const ratio = img.width / img.height;
   const width = viewport.width;
   const height = width / ratio;
 

@@ -2,8 +2,16 @@
 
 import { useFilmStore } from "@/store/filmStore";
 import { SlidersHorizontal, Image as ImageIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
+
+interface ControlGroupProps {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (value: number[]) => void;
+}
 
 export function Controls() {
   const { 
@@ -23,10 +31,10 @@ export function Controls() {
 
       <div className="space-y-4">
         <ControlGroup label="Exposure" value={exposure} min={-2.0} max={2.0} step={0.1}
-          onChange={(v) => setParam('exposure', v[0])} 
+          onChange={(v: number[]) => setParam('exposure', v[0])} 
         />
         <ControlGroup label="Contrast" value={contrast} min={0.5} max={2.0} step={0.1}
-          onChange={(v) => setParam('contrast', v[0])} 
+          onChange={(v: number[]) => setParam('contrast', v[0])} 
         />
       </div>
 
@@ -39,24 +47,24 @@ export function Controls() {
         </div>
         
         <ControlGroup label="Grain Strength" value={grainStrength} min={0.0} max={1.0} step={0.05}
-          onChange={(v) => setParam('grainStrength', v[0])} 
+          onChange={(v: number[]) => setParam('grainStrength', v[0])} 
         />
         <ControlGroup label="Grain Scale" value={grainScale} min={0.5} max={5.0} step={0.1}
-          onChange={(v) => setParam('grainScale', v[0])} 
+          onChange={(v: number[]) => setParam('grainScale', v[0])} 
         />
         
         <ControlGroup label="Halation Strength" value={halationIntensity} min={0.0} max={2.0} step={0.1}
-          onChange={(v) => setParam('halationIntensity', v[0])} 
+          onChange={(v: number[]) => setParam('halationIntensity', v[0])} 
         />
          <ControlGroup label="Halation Thresh" value={halationThreshold} min={0.5} max={1.0} step={0.01}
-          onChange={(v) => setParam('halationThreshold', v[0])} 
+          onChange={(v: number[]) => setParam('halationThreshold', v[0])} 
         />
       </div>
     </div>
   );
 }
 
-function ControlGroup({ label, value, min, max, step, onChange }: any) {
+function ControlGroup({ label, value, min, max, step, onChange }: ControlGroupProps) {
   return (
     <div className="space-y-3">
       <div className="flex justify-between">
